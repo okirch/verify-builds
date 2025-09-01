@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# This script can be used to download packages from an OBS build project.
+# It downloads the package(s) from two projects; one considered "old" and
+# one "new". The resulting rpms can then be compared using verify-rebuilt.
+
+ARCH=x86_64
+OLD=SUSE:SLFO:Main:Build/standard
+NEW=SUSE:SLFO:1.2/standard
+
+function download {
+
+	obspkg=$2
+	project=${1/\/*}
+	repo=${1#*/}
+
+	osc -A https://api.suse.de getbinaries -d "$1/$ARCH" $project $obspkg $repo $ARCH
+}
+
+for build; do
+	echo "Downloading rpms for $build"
+	download $OLD $build
+	download $NEW $build
+done
+
+
+

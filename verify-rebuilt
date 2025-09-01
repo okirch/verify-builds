@@ -1,0 +1,196 @@
+#!/bin/bash
+#
+# Compare two sets of RPMs, and display any differences.
+#
+
+set -e
+
+ARCH=x86_64
+OLD=SUSE:SLFO:Main:Build/standard/$ARCH
+NEW=SUSE:SLFO:1.2/standard/$ARCH
+
+function build_link_farm {
+
+	dir=$1
+	linkdir="$dir/_links"
+
+	mkdir -p "$linkdir"
+
+	ls $dir | grep '\.rpm$' | while read longname; do
+		shortname=$(rpm --nosignature -q --qf '%{name}.rpm' -p "$dir/$longname")
+		ln -sf "../$longname" "$linkdir/$shortname"
+		echo $shortname
+	done | sort
+}
+
+function display_list_with_heading {
+
+	HEADING=$1
+	MAXLINES=10
+
+	count=0
+	while read line; do
+		if [ -n "$HEADING" ]; then
+			echo
+			echo "$HEADING"
+			HEADING=
+		fi
+
+		let count=$count+1
+		if [ $count -le $MAXLINES ]; then
+			echo "   $line"
+		fi
+	done
+
+	if [ $count -gt $MAXLINES ]; then
+		let snipped=$count-$MAXLINES
+		echo "... $snipped lines more"
+	fi
+
+	if [ -z "$HEADING" ]; then
+		echo
+	fi
+}
+
+function unpack_one_rpm {
+
+	destdir=$1
+	rpm=$2
+
+	rpm2cpio "$rpm" | (
+		mkdir -p $destdir
+		cd $destdir
+		cpio --quiet -id
+	)
+
+	find $destdir -printf '%P\n' | sort >$destdir.txt
+#	find $destdir -printf '%y %U %G %m %P\n'
+}
+
+function display_file_in {
+	dir=$1
+
+	cd $dir
+	while read name; do
+		ls -ld "$name"
+	done
+}
+
+function compare_rpms {
+
+	while read name; do
+		oldrpm="$OLD/_links/$name"
+		newrpm="$NEW/_links/$name"
+
+		oldver=$(rpm --nosignature -q --qf '%{version}' -p "$oldname")
+		newver=$(rpm --nosignature -q --qf '%{version}' -p "$newname")
+		if [ "$old" != "$new" ]; then
+			echo "$name: version changed from {$oldver} to ${newver}"
+			continue
+		fi
+
+		rm -rf _unpacked
+		unpack_one_rpm _unpacked/old $oldrpm
+		unpack_one_rpm _unpacked/new $newrpm
+
+		# introduce deliberate breakage for testing:
+		if false; then
+			sed -i -e '/trap$/d' _unpacked/new.txt
+			test -d _unpacked/old/usr/share/bash && chmod 711 _unpacked/old/usr/share/bash
+			test -f _unpacked/new/usr/include/bash/sig.h && echo "lalla" >> _unpacked/new/usr/include/bash/sig.h
+		fi
+
+		comm -23 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/old | display_list_with_heading "Files unique to $OLD $name"
+		comm -13 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/new | display_list_with_heading "Files unique to $NEW $name"
+
+		comm -12 _unpacked/old.txt _unpacked/new.txt | compare_files | display_list_with_heading "$name: files changed"
+	done
+}
+
+function complain_about_file {
+
+	fname="$1"; shift
+
+	echo "$fname: $@"
+
+	(cd _unpacked/old; echo -n ".  old: "; ls -ld "$fname")
+	(cd _unpacked/new; echo -n ".  new: "; ls -ld "$fname")
+}
+
+function compare_iattr {
+
+	fname="$1"
+
+	oldval=$(stat -c '%F %a %G %U' "_unpacked/old/$fname")
+	newval=$(stat -c '%F %a %G %U' "_unpacked/new/$fname")
+	if [ "$oldval" != "$newval" ]; then
+		complain_about_file "$fname" "change of file type, permissions or owner"
+		return 1
+	fi
+
+}
+
+function compare_symlink {
+
+	fname=$1
+
+	oldlink=$(readlink "_unpacked/old/$fname")
+	newlink=$(readlink "_unpacked/new/$fname")
+	if [ "$oldlink" != "$newlink" ]; then
+		complain_about_file "$fname" "change of symlink target"
+		return 1
+	fi
+}
+
+function compare_device {
+
+	fname=$1
+
+	olddev=$(stat -c '%t:%T' "_unpacked/old/$fname")
+	newdedev=$(stat -c '%t:%T' "_unpacked/new/$fname")
+	if [ "$olddev" != "$newdev" ]; then
+		complain_about_file "$fname" "change device special file"
+		return 1
+	fi
+}
+
+function compare_regular_file {
+
+	fname=$1
+
+	if ! cmp -s "_unpacked/old/$fname"  "_unpacked/new/$fname"; then
+		complain_about_file "$fname" "regular file changed content"
+		return 1
+	fi
+}
+
+function compare_files {
+
+	while read relative_path; do
+		old="_unpacked/old/$relative_path"
+		new="_unpacked/new/$relative_path"
+
+		if ! compare_iattr "$relative_path"; then
+			continue
+		fi
+
+		if [ -L "$old" ]; then
+			compare_symlink "$relative_path"
+		elif [ -b "$old" -o -c "$old" ]; then
+			compare_device "$relative_path"
+		elif [ -f "$old" ]; then
+			compare_regular_file "$relative_path"
+		else
+			# socket, fifo, directory: nothing to check
+			: 
+		fi
+	done
+}
+
+build_link_farm $OLD > oldrpms.txt
+build_link_farm $NEW > newrpms.txt
+
+comm -23 oldrpms.txt newrpms.txt | display_list_with_heading "Packages unique to $OLD"
+comm -13 oldrpms.txt newrpms.txt | display_list_with_heading "Packages unique to $NEW"
+
+comm -12 oldrpms.txt newrpms.txt | compare_rpms
