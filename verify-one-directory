@@ -5,9 +5,14 @@
 
 set -e
 
-ARCH=x86_64
-OLD=SUSE:SLFO:Main:Build/standard/$ARCH
-NEW=SUSE:SLFO:1.2/standard/$ARCH
+if [ $# -eq 2 ]; then
+	OLD=$1
+	NEW=$2
+else
+	ARCH=x86_64
+	OLD=SUSE:SLFO:Main:Build/standard/$ARCH
+	NEW=SUSE:SLFO:1.2/standard/$ARCH
+fi
 
 function build_link_farm {
 
