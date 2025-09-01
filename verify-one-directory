@@ -98,13 +98,6 @@ function compare_rpms {
 		unpack_one_rpm _unpacked/old $oldrpm
 		unpack_one_rpm _unpacked/new $newrpm
 
-		# introduce deliberate breakage for testing:
-		if false; then
-			sed -i -e '/trap$/d' _unpacked/new.txt
-			test -d _unpacked/old/usr/share/bash && chmod 711 _unpacked/old/usr/share/bash
-			test -f _unpacked/new/usr/include/bash/sig.h && echo "lalla" >> _unpacked/new/usr/include/bash/sig.h
-		fi
-
 		comm -23 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/old | display_list_with_heading "Files unique to $OLD $name"
 		comm -13 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/new | display_list_with_heading "Files unique to $NEW $name"
 
