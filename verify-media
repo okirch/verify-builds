@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+	echo "Usage: $0 <oldmedia> <newmedia>" >&2
+	exit 1
+fi
+
+OLDMEDIA=$1
+NEWMEDIA=$2
+
+for arch in noarch aarch64 ppc64le s390x x86_64; do
+	echo "## Comparing images for architecture $arch"
+	echo
+	./verify-one-directory "$OLDMEDIA/$arch" "$NEWMEDIA/$arch"
+done
