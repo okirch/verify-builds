@@ -21,7 +21,7 @@ function build_link_farm {
 
 	mkdir -p "$linkdir"
 
-	ls $dir | grep '\.rpm$' | while read longname; do
+	ls $dir | grep '\.rpm$' | while read -r longname; do
 		shortname=$(rpm --nosignature -q --qf '%{name}.rpm' -p "$dir/$longname")
 		ln -sf "../$longname" "$linkdir/$shortname"
 		echo $shortname
@@ -34,7 +34,7 @@ function display_list_with_heading {
 	MAXLINES=10
 
 	count=0
-	while read line; do
+	while read -r line; do
 		if [ -n "$HEADING" ]; then
 			echo
 			echo "$HEADING"
@@ -117,7 +117,7 @@ function compare_rpms {
 
 	mkdir -p _results
 
-	while read name; do
+	while read -r name; do
 		result="_results/$name"
 
 		if [ -s "$result" ]; then
@@ -200,7 +200,7 @@ function compare_regular_file {
 
 function compare_files {
 
-	while read relative_path; do
+	while read -r relative_path; do
 		old="_unpacked/old/$relative_path"
 		new="_unpacked/new/$relative_path"
 
