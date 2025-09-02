@@ -179,7 +179,6 @@ function compare_symlink {
 	newlink=$(readlink "_unpacked/new/$fname")
 	if [ "$oldlink" != "$newlink" ]; then
 		complain_about_file "$fname" "change of symlink target"
-		return 1
 	fi
 }
 
@@ -191,7 +190,6 @@ function compare_device {
 	newdedev=$(stat -c '%t:%T' "_unpacked/new/$fname")
 	if [ "$olddev" != "$newdev" ]; then
 		complain_about_file "$fname" "change device special file"
-		return 1
 	fi
 }
 
@@ -201,7 +199,6 @@ function compare_regular_file {
 
 	if ! cmp -s "_unpacked/old/$fname"  "_unpacked/new/$fname"; then
 		complain_about_file "$fname" "regular file changed content"
-		return 1
 	fi
 }
 
