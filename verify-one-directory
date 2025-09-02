@@ -73,6 +73,19 @@ function display_file_in {
 	done
 }
 
+function record_missing_rpm {
+
+	msg="$1"
+
+	mkdir -p _results
+
+	while read -r name; do
+		result="_results/$name"
+		echo "$name: $msg"
+		echo "$msg" > $result
+	done
+}
+
 # Given a name like "bash.rpm", compare _links/old/bash.rpm to _links/new/bash.rpm
 # This will check whether the version changed. If it did not, unpack the two RPMS
 # and compare them file by file.
@@ -226,7 +239,7 @@ function compare_files {
 	done
 }
 
-comm -23 _old/rpms.txt _new/rpms.txt | display_list_with_heading "Packages unique to OLD build"
-comm -13 _old/rpms.txt _new/rpms.txt | display_list_with_heading "Packages unique to NEW build"
+comm -23 _old/rpms.txt _new/rpms.txt | record_missing_rpm "package was REMOVED from build"
+comm -13 _old/rpms.txt _new/rpms.txt | record_missing_rpm "package was ADDED to build"
 
 comm -12 _old/rpms.txt _new/rpms.txt | compare_rpms
