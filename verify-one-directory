@@ -136,7 +136,8 @@ function compare_rpms {
 		fi
 
 		if [ ! -f "$result" ]; then
-			compare_rpm_old_new "$name" > "$result" 2>&1
+			compare_rpm_old_new "$name" > _results/temp 2>&1
+			mv _results/temp "$result"
 		fi
 
 		if [ -s "$result" ]; then
