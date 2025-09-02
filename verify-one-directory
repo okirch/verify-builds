@@ -105,8 +105,8 @@ function compare_rpm_old_new {
 
 	oldver=$(rpm --nosignature -q --qf '%{version}' -p "$oldrpm")
 	newver=$(rpm --nosignature -q --qf '%{version}' -p "$newrpm")
-	if [ "$old" != "$new" ]; then
-		echo "$name: version changed from {$oldver} to ${newver}"
+	if [ "$oldver" != "$newver" ]; then
+		echo "$name: version changed from $oldver to $newver"
 		return
 	fi
 
