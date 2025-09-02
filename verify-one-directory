@@ -17,13 +17,14 @@ fi
 function build_link_farm {
 
 	dir=$1
-	linkdir="$dir/_links"
+	linkdir=$2
 
 	mkdir -p "$linkdir"
 
+	linkdst=$(realpath "$dir")
 	ls $dir | grep '\.rpm$' | while read -r longname; do
 		shortname=$(rpm --nosignature -q --qf '%{name}.rpm' -p "$dir/$longname")
-		ln -sf "../$longname" "$linkdir/$shortname"
+		ln -sf "$linkdst/$longname" "$linkdir/$shortname"
 		echo $shortname
 	done | sort
 }
@@ -80,8 +81,8 @@ function display_file_in {
 	done
 }
 
-# Given a name like "bash.rpm", compare OLD/_links/bash.rpm to NEW/_links/bash.rpm
-# This will check whether the version changed. If it has now, unpack the two RPMS
+# Given a name like "bash.rpm", compare _links/old/bash.rpm to _links/new/bash.rpm
+# This will check whether the version changed. If it did not, unpack the two RPMS
 # and compare them file by file.
 # Checks include
 #	file type (reg, dir, sock, ...)
@@ -89,12 +90,13 @@ function display_file_in {
 #	for regular files: file content
 #	for symlinks: target of link
 #	for device files: dev major/minor
+# The check ignores any change in mtime.
 function compare_rpm_old_new {
 
 	name="$1"
 
-	oldrpm="$OLD/_links/$name"
-	newrpm="$NEW/_links/$name"
+	oldrpm="_links/old/$name"
+	newrpm="_links/new/$name"
 
 	oldver=$(rpm --nosignature -q --qf '%{version}' -p "$oldname")
 	newver=$(rpm --nosignature -q --qf '%{version}' -p "$newname")
@@ -221,8 +223,8 @@ function compare_files {
 	done
 }
 
-build_link_farm $OLD > oldrpms.txt
-build_link_farm $NEW > newrpms.txt
+build_link_farm $OLD _links/old > oldrpms.txt
+build_link_farm $NEW _links/new > newrpms.txt
 
 comm -23 oldrpms.txt newrpms.txt | display_list_with_heading "Packages unique to $OLD"
 comm -13 oldrpms.txt newrpms.txt | display_list_with_heading "Packages unique to $NEW"

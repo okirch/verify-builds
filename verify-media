@@ -16,5 +16,8 @@ for arch in noarch aarch64 ppc64le s390x x86_64; do
 	# run; we need to do that here.
 	rm -rf _results
 
+	# remove the link farm
+	rm -rf _links
+
 	./verify-one-directory "$OLDMEDIA/$arch" "$NEWMEDIA/$arch"
 done
