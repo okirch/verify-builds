@@ -35,7 +35,7 @@ function display_list_with_heading {
 	MAXLINES=10
 
 	count=0
-	while read -r line; do
+	while IFS="" read -r line; do
 		if [ -n "$HEADING" ]; then
 			echo
 			echo "$HEADING"
@@ -149,8 +149,8 @@ function complain_about_file {
 
 	echo "$fname: $@"
 
-	(cd _unpacked/old; echo -n ".  old: "; ls -ld "$fname")
-	(cd _unpacked/new; echo -n ".  new: "; ls -ld "$fname")
+	(cd _unpacked/old; echo -n "   old: "; ls -ld "$fname")
+	(cd _unpacked/new; echo -n "   new: "; ls -ld "$fname")
 }
 
 function compare_iattr {
