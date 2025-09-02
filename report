@@ -1,0 +1,11 @@
+#!/bin/bash
+#
+# Very simple script to display the results from the last run
+#
+
+find _results -size +1 -type f |
+	while read path; do
+		name=${path##*/}
+		echo "## $path ##"
+		cat $path
+	done

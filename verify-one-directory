@@ -25,18 +25,15 @@ function display_list_with_heading {
 
 	HEADING=$1
 
-	while IFS="" read -r line; do
-		if [ -n "$HEADING" ]; then
-			echo
-			echo "$HEADING"
-			HEADING=
-		fi
-		echo "   $line"
-	done
-
-	if [ -z "$HEADING" ]; then
+	cat >_unpacked/list
+	if [ -s _unpacked/list ]; then
+		echo
+		echo "$HEADING"
+		sed 's|^|   |' < _unpacked/list
 		echo
 	fi
+
+	rm -f _unpacked/list
 }
 
 function cat_truncate {
