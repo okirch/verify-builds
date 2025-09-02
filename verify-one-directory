@@ -24,29 +24,35 @@ function build_link_farm {
 function display_list_with_heading {
 
 	HEADING=$1
-	MAXLINES=10
 
-	count=0
 	while IFS="" read -r line; do
 		if [ -n "$HEADING" ]; then
 			echo
 			echo "$HEADING"
 			HEADING=
 		fi
-
-		let count=$count+1
-		if [ $count -le $MAXLINES ]; then
-			echo "   $line"
-		fi
+		echo "   $line"
 	done
-
-	if [ $count -gt $MAXLINES ]; then
-		let snipped=$count-$MAXLINES
-		echo "... $snipped lines more"
-	fi
 
 	if [ -z "$HEADING" ]; then
 		echo
+	fi
+}
+
+function cat_truncate {
+
+	maxlines=$1
+	path=$2
+
+	lines=$(wc -l "$path" | (read count rest; echo $count))
+
+	if [ $lines -gt $maxlines ]; then
+		head -$maxlines "$path"
+		let snipped=$lines-$maxlines
+		echo "... $snipped lines more"
+		echo
+	else
+		cat "$path"
 	fi
 }
 
@@ -155,7 +161,7 @@ function compare_rpms {
 
 		if [ -s "$result" ]; then
 			echo "$name: detected changes"
-			cat "$result"
+			cat_truncate 20 "$result"
 		else
 			echo "$name: unchanged"
 		fi
