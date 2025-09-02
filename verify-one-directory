@@ -69,39 +69,75 @@ function unpack_one_rpm {
 	)
 
 	find $destdir -printf '%P\n' | sort >$destdir.txt
-#	find $destdir -printf '%y %U %G %m %P\n'
 }
 
 function display_file_in {
 	dir=$1
 
 	cd $dir
-	while read name; do
+	while read -r name; do
 		ls -ld "$name"
 	done
 }
 
+# Given a name like "bash.rpm", compare OLD/_links/bash.rpm to NEW/_links/bash.rpm
+# This will check whether the version changed. If it has now, unpack the two RPMS
+# and compare them file by file.
+# Checks include
+#	file type (reg, dir, sock, ...)
+#	user, group, permissions
+#	for regular files: file content
+#	for symlinks: target of link
+#	for device files: dev major/minor
+function compare_rpm_old_new {
+
+	name="$1"
+
+	oldrpm="$OLD/_links/$name"
+	newrpm="$NEW/_links/$name"
+
+	oldver=$(rpm --nosignature -q --qf '%{version}' -p "$oldname")
+	newver=$(rpm --nosignature -q --qf '%{version}' -p "$newname")
+	if [ "$old" != "$new" ]; then
+		echo "$name: version changed from {$oldver} to ${newver}"
+		return
+	fi
+
+	rm -rf _unpacked
+	unpack_one_rpm _unpacked/old $oldrpm
+	unpack_one_rpm _unpacked/new $newrpm
+
+	comm -23 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/old | display_list_with_heading "Files unique to $OLD $name"
+	comm -13 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/new | display_list_with_heading "Files unique to $NEW $name"
+
+	comm -12 _unpacked/old.txt _unpacked/new.txt | compare_files | display_list_with_heading "$name: files changed"
+}
+
 function compare_rpms {
 
-	while read name; do
-		oldrpm="$OLD/_links/$name"
-		newrpm="$NEW/_links/$name"
+	mkdir -p _results
 
-		oldver=$(rpm --nosignature -q --qf '%{version}' -p "$oldname")
-		newver=$(rpm --nosignature -q --qf '%{version}' -p "$newname")
-		if [ "$old" != "$new" ]; then
-			echo "$name: version changed from {$oldver} to ${newver}"
+	while read name; do
+		result="_results/$name"
+
+		if [ -s "$result" ]; then
+			# We already analyzed this in a previous run; so just tell
+			# the user it has changed.
+			echo "$name: has changes (from previous run; see $result)"
 			continue
 		fi
 
-		rm -rf _unpacked
-		unpack_one_rpm _unpacked/old $oldrpm
-		unpack_one_rpm _unpacked/new $newrpm
+		if [ ! -f "$result" ]; then
+			compare_rpm_old_new "$name" > "$result" 2>&1
+		fi
 
-		comm -23 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/old | display_list_with_heading "Files unique to $OLD $name"
-		comm -13 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/new | display_list_with_heading "Files unique to $NEW $name"
 
-		comm -12 _unpacked/old.txt _unpacked/new.txt | compare_files | display_list_with_heading "$name: files changed"
+		if [ -s "$result" ]; then
+			echo "$name: detected changes"
+			cat "$result"
+		else
+			echo "$name: unchanged"
+		fi
 	done
 }
 
