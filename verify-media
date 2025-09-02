@@ -8,16 +8,88 @@ fi
 OLDMEDIA=$1
 NEWMEDIA=$2
 
-for arch in noarch aarch64 ppc64le s390x x86_64; do
-	echo "## Comparing images for architecture $arch"
-	echo
+function cleanup_on_exit {
 
-	# verify-one-directory does not wipe the results from a previous
-	# run; we need to do that here.
-	rm -rf _results
+	umount _old/mount 2>/dev/null
+	umount _new/mount 2>/dev/null
+}
 
-	# remove the link farm
-	rm -rf _links
+function maybe_mount_iso {
 
-	./verify-one-directory "$OLDMEDIA/$arch" "$NEWMEDIA/$arch"
-done
+	which=$1
+	media=$2
+
+	workdir="_$which"
+	mkdir -p "$workdir"
+
+	case "$media" in
+	*.install.iso)
+		build=$(expr "$media" : '.*-\([^-]*\).install.iso')
+		arch=$(expr "$media" : '.*-\([^-]*\)-[^-]*.install.iso')
+
+		echo "$build" > "$workdir/build"
+		echo "$arch" > "$workdir/arch"
+		mkdir -p "$workdir/mount"
+		mount -o loop,ro "$media" "$workdir/mount"
+		echo "Mounted $which $media as $workdir/mount"
+		: ;;
+
+	*)	echo "Don't know yet how to handle this image type: $media" >&2
+		exit 1
+	esac
+}
+
+# The RPMs on media usually have "full" names that consist of
+# NAME-VERSION-RELEASE.ARCH.rpm
+# Create a farm of links formatted as NAME.rpm to allow like-to-like
+# comparison
+function build_link_farm {
+
+	# new or old?
+	which=$1
+
+	basedir="_$which/mount/install"
+	linkdir="_$which/links"
+	manifest="_$which/rpms.txt"
+
+	if [ -s "$manifest" ]; then
+		echo "$manifest exists; not re-building link farm"
+		return
+	fi
+
+	rm -rf "$linkdir"
+	mkdir -p "$linkdir"
+
+	for arch in noarch aarch64 ppc64le s390x x86_64; do
+		dir="$basedir/$arch"
+		test -d "$dir" || continue
+
+		echo -n "Building link farm for $dir" >&2
+		linkdst=$(realpath "$dir")
+		ls $dir | grep '\.rpm$' | while read -r longname; do
+			shortname=$(rpm --nosignature -q --qf '%{name}.rpm' -p "$dir/$longname")
+			ln -sf "$linkdst/$longname" "$linkdir/$shortname"
+			echo -n "." >&2
+		done
+		echo " done" >&2
+	done
+
+	ls "$linkdir" | sort > "$manifest"
+}
+
+trap cleanup_on_exit 0 INT HUP
+
+maybe_mount_iso old $OLDMEDIA
+maybe_mount_iso new $NEWMEDIA
+
+oldarch=$(cat _old/arch)
+newarch=$(cat _new/arch)
+if [ "$oldarch" != "$newarch" ]; then
+	echo "Cannot compare $OLDMEDIA and $NEWMEDIA; they seem to be for different architectures" >&2
+	exit 1
+fi
+
+build_link_farm old
+build_link_farm new
+
+./verify-one-directory

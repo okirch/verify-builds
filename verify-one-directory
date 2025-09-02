@@ -1,18 +1,10 @@
 #!/bin/bash
 #
 # Compare two sets of RPMs, and display any differences.
+# The list of rpms to compare is expected in _old/rpms.txt and _new/rpms.txt
 #
 
 set -e
-
-if [ $# -eq 2 ]; then
-	OLD=$1
-	NEW=$2
-else
-	ARCH=x86_64
-	OLD=SUSE:SLFO:Main:Build/standard/$ARCH
-	NEW=SUSE:SLFO:1.2/standard/$ARCH
-fi
 
 function build_link_farm {
 
@@ -95,11 +87,11 @@ function compare_rpm_old_new {
 
 	name="$1"
 
-	oldrpm="_links/old/$name"
-	newrpm="_links/new/$name"
+	oldrpm="_old/links/$name"
+	newrpm="_new/links/$name"
 
-	oldver=$(rpm --nosignature -q --qf '%{version}' -p "$oldname")
-	newver=$(rpm --nosignature -q --qf '%{version}' -p "$newname")
+	oldver=$(rpm --nosignature -q --qf '%{version}' -p "$oldrpm")
+	newver=$(rpm --nosignature -q --qf '%{version}' -p "$newrpm")
 	if [ "$old" != "$new" ]; then
 		echo "$name: version changed from {$oldver} to ${newver}"
 		return
@@ -123,8 +115,8 @@ function compare_rpm_old_new {
 	unpack_one_rpm _unpacked/old $oldrpm
 	unpack_one_rpm _unpacked/new $newrpm
 
-	comm -23 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/old | display_list_with_heading "Files unique to $OLD $name"
-	comm -13 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/new | display_list_with_heading "Files unique to $NEW $name"
+	comm -23 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/old | display_list_with_heading "Files unique to OLD $name"
+	comm -13 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/new | display_list_with_heading "Files unique to NEW $name"
 
 	comm -12 _unpacked/old.txt _unpacked/new.txt | compare_files | display_list_with_heading "$name: files changed"
 }
@@ -236,10 +228,7 @@ function compare_files {
 	done
 }
 
-build_link_farm $OLD _links/old > oldrpms.txt
-build_link_farm $NEW _links/new > newrpms.txt
+comm -23 _old/rpms.txt _new/rpms.txt | display_list_with_heading "Packages unique to OLD build"
+comm -13 _old/rpms.txt _new/rpms.txt | display_list_with_heading "Packages unique to NEW build"
 
-comm -23 oldrpms.txt newrpms.txt | display_list_with_heading "Packages unique to $OLD"
-comm -13 oldrpms.txt newrpms.txt | display_list_with_heading "Packages unique to $NEW"
-
-comm -12 oldrpms.txt newrpms.txt | compare_rpms
+comm -12 _old/rpms.txt _new/rpms.txt | compare_rpms
