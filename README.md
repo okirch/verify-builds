@@ -7,15 +7,38 @@ have been rebuilt for some reason, are identical with the previous build.
 The code does not aim to be clever or fast, but simple enough to verify
 (by inspection) that it's not doing anything nefarious.
 
-The directories containing the two different builds are specified at the
-top of the script, and can be edited directly. The script expects these
-to be two flat directories containing RPMs. For instance, when comparing e.g.
-two typical installation media, which contain per-architecture subdirectories,
-you would call
+To compare two builds, you need the ISO files containing the full build.
+Currently, the script expects the naming of ISOs and their layout to
+follow the conventions used in development of SLES 16.0, eg
 
-	./verify-media /mnt/oldmedium /mnt/newmedium
+	SLES-16.0-Full-x86_64-Build134.2.install.iso
+	SLES-16.0-Full-x86_64-GMC.install.iso
 
-This will invoke the verify-one-directory for each architecture in turn, eg
+	./verify-media $old_iso $new_iso
 
-	./verify-one-directory /mnt/oldmedium/aarch64 /mnt/newmedium/aarch64
+This will loopback mount the two isos, set up a farm of symlinks, and then
+run ./verify-one-directory that will compare the two sets of rpms.
+
+When comparing rpms, the script first checks whether the version changed.
+If it did, this will be reported, but any further checks are skipped.
+
+If the version did not change, it will unpack the two RPMS and compare
+their content file by file.
+
+Checks include
+      - file type (reg, dir, sock, ...)
+      - user, group, permissions
+      - for regular files: file content
+      - for symlinks: target of link
+      - for device files: dev major/minor
+
+The check ignores any change in mtime.
+
+Results are left in the _results directory. Killing and restarting the
+verify-media script will not inspect any rpms for which it detects a
+corresponding file in _results. This allows you to restart the script
+without having to start over from the beginning (which is nice if you
+happen to be the developer :-)
+
+
 
