@@ -105,6 +105,20 @@ function compare_rpm_old_new {
 		return
 	fi
 
+	oldlogfp=$(rpm --nosignature -q --changelog -p "$oldrpm" | sha1sum -)
+	newlogfp=$(rpm --nosignature -q --changelog -p "$newrpm" | sha1sum -)
+
+	if [ "$oldlogfp" != "$newlogfp" ]; then
+		echo
+		echo "$name: changelog modified"
+
+		mkdir -p _changelog
+		rpm --nosignature -q --changelog -p "$oldrpm" >_changelog/old
+		rpm --nosignature -q --changelog -p "$newrpm" >_changelog/new
+		diff -u _changelog/old _changelog/new | sed 's|^|   |'
+		rm -rf _changelog
+	fi
+
 	rm -rf _unpacked
 	unpack_one_rpm _unpacked/old $oldrpm
 	unpack_one_rpm _unpacked/new $newrpm
@@ -132,7 +146,6 @@ function compare_rpms {
 		if [ ! -f "$result" ]; then
 			compare_rpm_old_new "$name" > "$result" 2>&1
 		fi
-
 
 		if [ -s "$result" ]; then
 			echo "$name: detected changes"
