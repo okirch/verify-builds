@@ -11,5 +11,10 @@ NEWMEDIA=$2
 for arch in noarch aarch64 ppc64le s390x x86_64; do
 	echo "## Comparing images for architecture $arch"
 	echo
+
+	# verify-one-directory does not wipe the results from a previous
+	# run; we need to do that here.
+	rm -rf _results
+
 	./verify-one-directory "$OLDMEDIA/$arch" "$NEWMEDIA/$arch"
 done
