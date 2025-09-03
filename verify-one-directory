@@ -127,25 +127,39 @@ function compare_rpm_old_new {
 		rm -rf _changelog
 	fi
 
-	oldscriptfp=$(rpm --nosignature -q --scripts -p "$oldrpm" | sha1sum -)
-	newscriptfp=$(rpm --nosignature -q --scripts -p "$newrpm" | sha1sum -)
+ 	compare_rpm_multiline_attr scripts "$name" "$oldrpm" "$newrpm"
 
-	if [ "$oldscriptfp" != "$newscriptfp" ]; then
-		echo
-		echo "$name: scripts modified"
-
-		mkdir -p _scripts
-		rpm --nosignature -q --scripts -p "$oldrpm" >_scripts/old
-		rpm --nosignature -q --scripts -p "$newrpm" >_scripts/new
-		diff -u _scripts/old _scripts/new | sed 's|^|   |'
-		rm -rf _scripts
-	fi
+#	compare_rpm_multiline_attr requires "$name" "$oldrpm" "$newrpm"
+#	compare_rpm_multiline_attr provides "$name" "$oldrpm" "$newrpm"
+#	compare_rpm_multiline_attr recommends "$name" "$oldrpm" "$newrpm"
 
 	rm -rf _unpacked
 	unpack_one_rpm _unpacked/old $oldrpm
 	unpack_one_rpm _unpacked/new $newrpm
 
 	./ftreecmp -N "$name" _unpacked/old _unpacked/new
+}
+
+function compare_rpm_multiline_attr {
+
+	what=$1
+	name=$2
+	oldrpm=$3
+	newrpm=$4
+
+	oldfp=$(rpm --nosignature -q --$what -p "$oldrpm" | sha1sum -)
+	newfp=$(rpm --nosignature -q --$what -p "$newrpm" | sha1sum -)
+
+	if [ "$oldfp" != "$newfp" ]; then
+		echo
+		echo "$name: $what modified"
+
+		mkdir -p _$what
+		rpm --nosignature -q --$what -p "$oldrpm" >_$what/old
+		rpm --nosignature -q --$what -p "$newrpm" >_$what/new
+		diff -u _$what/old _$what/new | sed 's|^|   |'
+		rm -rf _$what
+	fi
 }
 
 function compare_rpms {
