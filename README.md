@@ -11,8 +11,8 @@ To compare two builds, you need the ISO files containing the full build.
 Currently, the script expects the naming of ISOs and their layout to
 follow the conventions used in development of SLES 16.0, eg
 
-	SLES-16.0-Full-x86_64-Build134.2.install.iso
-	SLES-16.0-Full-x86_64-GMC.install.iso
+	old_iso=SLES-16.0-Full-x86_64-Build134.2.install.iso
+	new_iso=SLES-16.0-Full-x86_64-GMC.install.iso
 
 	./verify-media $old_iso $new_iso
 
@@ -26,11 +26,12 @@ If the version did not change, it will unpack the two RPMS and compare
 their content file by file.
 
 Checks include
-      - file type (reg, dir, sock, ...)
-      - user, group, permissions
-      - for regular files: file content
-      - for symlinks: target of link
-      - for device files: dev major/minor
+
+- file type (reg, dir, sock, ...)
+- user, group, permissions
+- for regular files: file content
+- for symlinks: target of link
+- for device files: dev major/minor
 
 The check ignores any change in mtime.
 
@@ -41,4 +42,13 @@ without having to start over from the beginning (which is nice if you
 happen to be the developer :-)
 
 
+## Building
 
+Before you can run the script(s), you need to compile the ftreecmp
+utility included in this project. It is a trivial little C program
+that recursively compares two directory trees. All you should need to
+compile it is gcc, glibc-devel and make:
+
+	make
+
+That's all
