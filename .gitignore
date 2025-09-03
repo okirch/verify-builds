@@ -1,4 +1,6 @@
 *.swp
+*.o
 _unpacked
 newrpms.txt
 oldrpms.txt
+ftreecmp

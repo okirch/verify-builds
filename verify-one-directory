@@ -131,10 +131,7 @@ function compare_rpm_old_new {
 	unpack_one_rpm _unpacked/old $oldrpm
 	unpack_one_rpm _unpacked/new $newrpm
 
-	comm -23 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/old | display_list_with_heading "Files unique to OLD $name"
-	comm -13 _unpacked/old.txt _unpacked/new.txt | display_file_in _unpacked/new | display_list_with_heading "Files unique to NEW $name"
-
-	comm -12 _unpacked/old.txt _unpacked/new.txt | compare_files | display_list_with_heading "$name: files changed"
+	./ftreecmp -N "$name" _unpacked/old _unpacked/new
 }
 
 function compare_rpms {
