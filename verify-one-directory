@@ -139,7 +139,7 @@ function compare_rpms {
 	mkdir -p _results
 
 	while read -r name; do
-		result="_results/$name"
+		result="_results/${name//.rpm}.txt"
 
 		if [ -s "$result" ]; then
 			# We already analyzed this in a previous run; so just tell
