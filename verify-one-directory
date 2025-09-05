@@ -137,7 +137,7 @@ function compare_rpm_old_new {
 	unpack_one_rpm _unpacked/old $oldrpm
 	unpack_one_rpm _unpacked/new $newrpm
 
-	./ftreecmp -N "$name" _unpacked/old _unpacked/new
+	./ftreecmp -i elf-buildid -N "$name" _unpacked/old _unpacked/new
 }
 
 function compare_rpm_multiline_attr {

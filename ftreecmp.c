@@ -16,9 +16,13 @@
 #include <dirent.h>
 #include <limits.h>
 
+#include <elf.h>
+#include <gelf.h>
+
 #include "fstate.h"
 
 static bool			opt_debug = false;
+static bool			opt_ignore_buildid = false;
 
 static bool			compare_directories(struct report *report, struct dstate *old, struct dstate *new);
 static bool			compare_files(struct report *report, struct fstate *old, struct fstate *new);
@@ -44,12 +48,16 @@ main(int argc, char **argv)
 	int exitval = 0;
 	int c;
 
-	while ((c = getopt(argc, argv, "dhN:")) != -1) {
+	while ((c = getopt(argc, argv, "dhi:N:")) != -1) {
 		switch (c) {
 		case 'd':
 			opt_debug = true;
 			break;
 
+		case 'i':
+			if (!strcmp(optarg, "elf-buildid"))
+				opt_ignore_buildid = true;
+			break;
 		case 'N':
 			opt_package_name = optarg;
 			break;
@@ -132,6 +140,136 @@ compare_directories(struct report *report, struct dstate *old, struct dstate *ne
 	return status;
 }
 
+struct ignore_range {
+	loff_t		offset;
+	size_t		size;
+};
+
+/*
+ * .gnu_debuglink contains a filename (which should never change), and a build id
+ * (which usually does change).
+ */
+static bool
+elf_locate_build_id(int fd, Elf64_Off offset, Elf64_Xword size, unsigned int align, struct ignore_range *range)
+{
+	unsigned char *data;
+	unsigned int k;
+	int n;
+
+	if (size > 2048)
+		return false;
+
+	/* make sure alignment is a power of 2 */
+	if (align & (align - 1))
+		return false;
+
+	if (lseek64(fd, offset, SEEK_SET) < 0) {
+		printf("lseek(%lu) failed: %m\n", (long) offset);
+		return false;
+	}
+
+	if ((data = alloca(size)) == NULL)
+		return false;
+
+	n = read(fd, data, size);
+	if (n != size)
+		return false;
+
+	/* find the end of the name */
+	for (k = 0; k < size && data[k] != 0; ++k)
+		;
+
+	k += 1;	/* consume NUL */
+	k = ((k + align - 1) & ~(align - 1));
+
+	if (k >= size)
+		return false;
+
+	range->offset = offset + k;
+	range->size = size - k;
+
+	if (range->size != 4 && range->size != 8)
+		return false;
+
+	return true;
+}
+
+static bool
+elf_identify_debug_section(int fd, struct ignore_range *ignore)
+{
+	static bool elf_checked = false;
+	Elf *elf = NULL;
+	Elf_Scn *scn;
+	bool rv = false;
+	size_t shstrndx;
+
+	if (!opt_ignore_buildid)
+		goto out;
+
+	if (!elf_checked) {
+		if (elf_version(EV_CURRENT)== EV_NONE)
+			return false;
+		elf_checked = true;
+	}
+
+	if (!(elf = elf_begin(fd, ELF_C_READ, NULL)))
+		goto out;
+
+	if (elf_kind(elf) != ELF_K_ELF)
+		goto out;
+
+	if (elf_getshdrstrndx(elf, &shstrndx) != 0)
+		goto out;
+
+	for (scn = NULL; (scn = elf_nextscn(elf, scn)) != NULL; ) {
+		GElf_Shdr shdr;
+		const char *name;
+
+		if (gelf_getshdr(scn , &shdr) != &shdr)
+			goto out;
+
+		if ((name = elf_strptr(elf, shstrndx, shdr.sh_name)) == NULL )
+			goto out;
+
+		if (!strcmp(name, ".gnu_debuglink")
+		 && elf_locate_build_id(fd, shdr.sh_offset, shdr.sh_size, shdr.sh_addralign, ignore)) {
+			// printf("build id at range <%lu,%u>\n", (long) ignore->offset, (int)  ignore->size);
+			rv = true;
+			goto out;
+		}
+	}
+
+out:
+	if (elf != NULL)
+		elf_end(elf);
+
+	/* rewind fd after messing around with ELF headers etc */
+	lseek(fd, 0, SEEK_SET);
+
+	return rv;
+}
+
+static void
+ignored_range_whiteout(struct ignore_range *skip, unsigned char *buf, loff_t offset, unsigned int len)
+{
+	loff_t relative_end, relative_start;
+
+	if (offset >= skip->offset + skip->size)
+		return;
+	if (skip->offset >= offset + len)
+		return;
+
+	relative_end = skip->offset + skip->size - offset;
+	if (relative_end < 0 || (loff_t) len < relative_end)
+		return;
+
+	relative_start = skip->offset - offset;
+	if (relative_start < 0)
+		relative_start = 0;
+
+	// printf("white out %ld bytes at buffer offset %ld\n", (long) (relative_end - relative_start), (long) relative_start);
+	memset(buf + relative_start, 0, relative_end - relative_start);
+}
 
 /*
  * Compare the contents of two regular files
@@ -141,7 +279,9 @@ compare_regular_files(struct report *report, struct fstate *old, struct fstate *
 {
 	struct stat *old_stat = old->stb;
 	struct stat *new_stat = new->stb;
+	struct ignore_range old_buildid, new_buildid, *skip = NULL;
 	int old_fd, new_fd;
+	loff_t offset;
 	int status = true;
 
 	if (old_stat->st_size != new_stat->st_size)
@@ -154,9 +294,15 @@ compare_regular_files(struct report *report, struct fstate *old, struct fstate *
 		return false;
 	}
 
+	if (elf_identify_debug_section(old_fd, &old_buildid)
+	 && elf_identify_debug_section(new_fd, &new_buildid)
+	 && !memcmp(&old_buildid, &new_buildid, sizeof(old_buildid)))
+		skip = &old_buildid;
+
 	if (opt_debug)
 		printf("D: comparing regular files %s vs %s\n", old->name, new->name);
 
+	offset = 0;
 	while (status) {
 		unsigned char old_buf[8192], new_buf[8192];
 		int old_len, new_len;
@@ -173,6 +319,11 @@ compare_regular_files(struct report *report, struct fstate *old, struct fstate *
 			break;
 		}
 
+		if (skip != NULL) {
+			ignored_range_whiteout(skip, old_buf, offset, old_len);
+			ignored_range_whiteout(skip, new_buf, offset, new_len);
+		}
+
 		if (old_len != new_len || memcmp(old_buf, new_buf, old_len)) {
 			status = false;
 			break;
@@ -180,6 +331,8 @@ compare_regular_files(struct report *report, struct fstate *old, struct fstate *
 
 		if (old_len == 0)
 			break;
+
+		offset += old_len;
 	}
 
 	close(old_fd);
