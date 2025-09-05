@@ -83,7 +83,7 @@ function record_missing_rpm {
 	mkdir -p _results
 
 	while read -r name; do
-		result="_results/$name"
+		result="_results/${name//.rpm}.txt"
 		echo "$name: $msg"
 		echo "$msg" > $result
 	done
